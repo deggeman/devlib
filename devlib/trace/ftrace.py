@@ -74,11 +74,12 @@ class FtraceCollector(TraceCollector):
         self.host_binary = None
         self.start_time = None
         self.stop_time = None
-        self.event_string = _build_trace_events(self.events)
+        self.event_string = None
         self.function_string = None
         self._reset_needed = True
 
         # Setup tracing paths
+        self.available_events_file    = self.target.path.join(self.tracing_path, 'available_events')
         self.available_functions_file = self.target.path.join(self.tracing_path, 'available_filter_functions')
         self.buffer_size_file         = self.target.path.join(self.tracing_path, 'buffer_size_kb')
         self.current_tracer_file      = self.target.path.join(self.tracing_path, 'current_tracer')
@@ -102,6 +103,23 @@ class FtraceCollector(TraceCollector):
             if not self.target.is_installed('trace-cmd'):
                 raise TargetError('No trace-cmd found on device and no_install=True is specified.')
             self.target_binary = 'trace-cmd'
+
+        # Validate required events to be traced
+        available_events = self.target.execute(
+                'cat {}'.format(self.available_events_file)).splitlines()
+        selected_events = []
+        for event in self.events:
+            # Convert globs supported by FTrace into valid regexp globs
+            _event = event
+            if event[0] != '*':
+                _event = '*' + event
+            event_re = re.compile(_event.replace('*', '.*'))
+            # Select events matching the required ones
+            if len(filter(event_re.match, available_events)) == 0:
+                self.target.logger.warning('Event(s) [{}] not available for tracing'.format(event))
+            else:
+                selected_events.append(event)
+        self.event_string = _build_trace_events(selected_events)
 
         # Check for function tracing support
         if self.functions:
