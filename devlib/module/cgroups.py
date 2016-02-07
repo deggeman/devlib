@@ -58,6 +58,10 @@ class Controller(object):
                     if fs.device == self.mount_name
                 ][0]
         else:
+            # Check if cgroup root is mounted ro, if it is remount rw
+            fs = [e for e in mounted if e.mount_point == mount_root ][0]
+            if 'ro' in fs.options:
+                target.execute('mount -o remount rw {}'.format(mount_root))
             # Mount the controller if not already in use
             self.mount_point = target.path.join(mount_root, self.mount_name)
             target.execute('mkdir -p {} 2>/dev/null'\
